@@ -67,7 +67,7 @@ class TestMethods(unittest.TestCase):
         self.assertTrue(kx in c)
         self.assertEqual(c[kx], vx)
 
-    def xxtest_CC4(self):
+    def test_CC4(self):
         vsize = 500
         cachesizes = [vsize * 2, vsize + 1, vsize, vsize - 1, vsize - 10,
                       vsize // 2, vsize // 7, vsize // 10]
