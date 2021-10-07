@@ -21,67 +21,56 @@
 # THE SOFTWARE.
 
 from functools import lru_cache
-import threading
-
-# @lru_cache contains an LRU cache implementation but doesn't expose it,
-# which is unfortunate in cases where a more general interface would be
-# useful. As a simple example, there might be an algorithm policy decision
-# based on whether something expensive to compute is currently in cache.
-# There could also be more complex decisions about *what* results to
-# cache (e.g., doing LRU but only on a subset of results).
-#
-# This class exposes a manual LRU cache with the following methods:
-#
-#      encache     : put something into the cache (bumping the LRU item out)
-#      __getitem__ : retrieve something from the cache, or raise KeyError
-#      __contains__: test for something being in the cache
-#
-# It does this by a clever ("brutish"?) hack to trick @lru_cache into
-# doing the bulk of the work. A key/value pair is entered into the
-# lru_cache by having this function:
-#
-#      @lru_cache
-#      def value_from_key(key):
-#          return value
-#
-# which returns a value for a key and can be decorated by @lru_cache to
-# get that key/value pair cached. But how does value_from_key know what
-# the value is? It's passed "under the covers" (out of sight from lru_cache)
-# via an object attribute! Yeehah!
-#
-# NOTE: THE SIMPLEST/FASTEST IMPLEMENTATION OF THIS IS NOT THREAD SAFE.
-#       See the ThreadSafe... subclass after this for a version with locking.
-#
-# XXX: Is there a simpler/better way to leverage the lru_cache code to
-# create an LRU cache where entries can be manually added to it?
-#
 
 
 class ManualLRUCache:
 
+    # STYLE NOTE: This class was nested because it is intimately tied
+    #             together with value_from_key() created/decorated
+    #             in ManualLRUCache.__init__ and used by encache.
+    #
+    # A 'Smuggle' allows passing a key and "smuggling in" an optional value.
+    # The point is that the value is hidden from @lru_cache via the
+    # implementation of dunder hash/eq methods here.  This is how the value
+    # is passed *in* to value_from_key as decorated with @lru_cache, so
+    # that value_from_key can return a value (from a key) causing
+    # the lru_cache code to encache the key/value pair.
+
+    class _Smuggle:
+        __slots__ = ['key', 'smuggledvalue']
+
+        def __init__(self, key):
+            self.key = key
+
+        # note that this ignores any smuggled value
+        def __hash__(self):
+            return hash(self.key)
+
+        # note that this ignores any smuggled value
+        def __eq__(self, other):
+            return self.key == other.key
+
     def __init__(self, cachesize=100):
-        self.__keyval = (object(), 'NO-MATCH')   # won't match any user key
 
-        # the magic function that (ab)uses lru_cache to do the work
+        # This is the magic function that (ab)uses lru_cache to do the work.
+        # NOTE: has to be created/decorated at init time (vs class method)
+        # so that each cache has its own @lru_cache internals, including
+        # having its own maxsize (cachesize) as specified.
         @lru_cache(maxsize=cachesize)
-        def value_from_key(key):
-            k, v = self.__keyval
-            if key == k:
-                return v     # most importantly, this makes lru_cache cache it
-            raise KeyError(key)
+        def __value_from_key(smg):
+            try:
+                return smg.smuggledvalue   # only works if coming from encache
+            except AttributeError as e:
+                raise KeyError(smg.key) from e
 
-        self._value_from_key = value_from_key
+        self._value_from_key = __value_from_key
 
     def encache(self, key, value):
-        """Force something into the cache. NOT THREAD SAFE."""
+        """Force something into the cache."""
         # Need to pass the value to _value_from_key... this way!
-        self.__keyval = (key, value)
-        # this shouldn't ever KeyError, but it can if invoked
-        # in multithreading without locks. Fail gracefully...
-        try:
-            self._value_from_key(key)            # puts it in the lru_cache
-        except KeyError:
-            pass
+        smg = self._Smuggle(key)
+        smg.smuggledvalue = value
+        self._value_from_key(smg)
 
     def __getitem__(self, key):
         # If lru_cache has this key, it will return the value.
@@ -89,7 +78,7 @@ class ManualLRUCache:
         # raise KeyError (because the key won't match __keyval).
         # This is how "return it if it is in the LRU cache" works.
         # See __contains__ for another way to understand this.
-        return self._value_from_key(key)
+        return self._value_from_key(self._Smuggle(key))
 
     def __contains__(self, key):
         # See __getitem__ for another way to understand this.
@@ -97,22 +86,4 @@ class ManualLRUCache:
             _ = self[key]
         except KeyError:
             return False
-        else:
-            return True
-
-
-# same but with locking for thread safety
-class ThreadSafeManualLRUCache(ManualLRUCache):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__lock = threading.Lock()
-
-    def encache(self, key, value):
-        with self.__lock:
-            super().encache(key, value)
-
-    def __getitem__(self, key):
-        with self.__lock:
-            return super().__getitem__(key)
-
-    # don't have to override __contains__ because __getitem__ lock suffices
+        return True

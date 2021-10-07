@@ -26,7 +26,3 @@ c['a'] --> 1
 c['b'] --> raises KeyError
 
 ```
-
-## Multithreading
-The base class is not thread safe. See ThreadSafeManualLRUCache for a version with appropriate locking for thread safety.
-
