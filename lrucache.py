@@ -73,10 +73,11 @@ class ManualLRUCache:
         self._value_from_key(smg)
 
     def __getitem__(self, key):
-        # If lru_cache has this key, it will return the value.
-        # Otherwise, this will invoke value_from_key which will
-        # raise KeyError (because the key won't match __keyval).
-        # This is how "return it if it is in the LRU cache" works.
+        # If lru_cache has this key, it will return the value
+        # (instead of invoking _value_from_key). Otherwise,
+        # _value_from_key will raise KeyError (because there is
+        # no smuggled value, only the key). This is how "return it if
+        # it is in the LRU cache" works.
         # See __contains__ for another way to understand this.
         return self._value_from_key(self._Smuggle(key))
 
