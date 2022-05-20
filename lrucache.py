@@ -37,10 +37,16 @@ class ManualLRUCache:
     # the lru_cache code to encache the key/value pair.
 
     class _Smuggle:
-        __slots__ = ['key', 'smuggledvalue']
+        __slots__ = ['__key', 'smuggledvalue']
 
         def __init__(self, key):
-            self.key = key
+            self.__key = key
+
+        # enforce read-only on key; this is really not necessary because
+        # _Smuggle is a private class here but do it anyway.
+        @property
+        def key(self):
+            return self.__key
 
         # note that this ignores any smuggled value
         def __hash__(self):
