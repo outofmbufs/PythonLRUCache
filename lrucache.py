@@ -39,8 +39,12 @@ class ManualLRUCache:
     class _Smuggle:
         __slots__ = ['__key', 'smuggledvalue']
 
-        def __init__(self, key):
+        _NOVALUE = object()
+
+        def __init__(self, key, val=_NOVALUE):
             self.__key = key
+            if val is not self._NOVALUE:   # note: None can be a legit value
+                self.smuggledvalue = val
 
         # enforce read-only on key; this is really not necessary because
         # _Smuggle is a private class here but do it anyway.
@@ -74,9 +78,7 @@ class ManualLRUCache:
     def encache(self, key, value):
         """Force something into the cache."""
         # Need to pass the value to _value_from_key... this way!
-        smg = self._Smuggle(key)
-        smg.smuggledvalue = value
-        self._value_from_key(smg)
+        self._value_from_key(self._Smuggle(key, value))
 
     def __getitem__(self, key):
         # If lru_cache has this key, it will return the value
