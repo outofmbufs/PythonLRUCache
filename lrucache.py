@@ -87,6 +87,9 @@ class ManualLRUCache:
         # See __contains__ for another way to understand this.
         return self._value_from_key(self._Smuggle(key))
 
+    def __setitem__(self, key, value):
+        self.encache(key, value)
+
     def __contains__(self, key):
         # See __getitem__ for another way to understand this.
         try:

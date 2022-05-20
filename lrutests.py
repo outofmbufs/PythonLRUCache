@@ -12,38 +12,49 @@ class TestMethods(unittest.TestCase):
     # helper function. Builds the cache.
     # NOTE: Tests rely on knowing this puts the items into the cache
     # in order (i.e., callers know the LRU corresponds to kvs)
-    def makecache(self, kvs):
+    def makecache1(self, kvs):
         c = ManualLRUCache(cachesize=len(kvs))
         for k, v in kvs:
             c.encache(k, v)
         return c
 
+    # same but uses [] notation
+    def makecache2(self, kvs):
+        c = ManualLRUCache(cachesize=len(kvs))
+        for k, v in kvs:
+            c[k] = v
+        return c
+
+    makecache = makecache2               # default but tests might use both
+
     def test_CC1(self):
-        c = self.makecache(self.testvals)
-        # all should be in the cache
-        for k, v in self.testvals:
-            self.assertTrue(k in c)
-            self.assertEqual(c[k], v)
+        for maker in (self.makecache1, self.makecache2):
+            c = maker(self.testvals)
+            # all should be in the cache
+            for k, v in self.testvals:
+                self.assertTrue(k in c)
+                self.assertEqual(c[k], v)
 
     def test_CC2(self):
-        c = self.makecache(self.testvals)
+        for maker in (self.makecache1, self.makecache2):
+            c = maker(self.testvals)
 
-        # add another kv, kicking out the first (oldest)
-        kx, vx = object(), 'whatever'
-        c.encache(kx, vx)
+            # add another kv, kicking out the first (oldest)
+            kx, vx = object(), 'whatever'
+            c.encache(kx, vx)
 
-        # now the first one should be gone
-        k0, v0 = self.testvals[0]
-        self.assertFalse(k0 in c)
+            # now the first one should be gone
+            k0, v0 = self.testvals[0]
+            self.assertFalse(k0 in c)
 
-        # the rest should all be in there
-        for k, v in self.testvals[1:]:
-            self.assertTrue(k in c)
-            self.assertEqual(c[k], v)
+            # the rest should all be in there
+            for k, v in self.testvals[1:]:
+                self.assertTrue(k in c)
+                self.assertEqual(c[k], v)
 
-        # and the newest one should be in there
-        self.assertTrue(kx in c)
-        self.assertEqual(c[kx], vx)
+            # and the newest one should be in there
+            self.assertTrue(kx in c)
+            self.assertEqual(c[kx], vx)
 
     def test_CC3(self):
         c = self.makecache(self.testvals)
@@ -111,6 +122,21 @@ class TestMethods(unittest.TestCase):
                         #     part of the @lru_cache interface? Is
                         #     cachesize a suggestion or a guarantee???
                         self.assertFalse(k in c)
+
+    def test_readme(self):
+        # example taken directly from README.md
+        c = ManualLRUCache()
+        c.encache('a', 1)
+        c['foo'] = 17
+
+        self.assertTrue('a' in c)
+        self.assertFalse('b' in c)
+        self.assertTrue('foo' in c)
+
+        self.assertEqual(c['a'], 1)
+        with self.assertRaises(KeyError):
+            _ = c['b']
+        self.assertEqual(c['foo'], 17)
 
     def test_threading(self):
         # an attempt to demonstrate that all this works
